@@ -44,18 +44,22 @@ export class CloseIssue implements HandleCommand {
             `${slack.user(slackUser)} closed this issue: ` + this.issueUrl,
             teamStream);
 
-        const issueResource = encodeURI(`${issueUrl}?state=closed`);
-
+        const jsonBody = { state: "closed" };
         return axios({
             method: 'patch',
-            url: issueResource,
+            url: issueUrl,
+            data: jsonBody,
             headers: { Authorization: `token ${githubToken}` }
         }).then((response) => {
             logger.info(`Successfully closed ${issueUrl}`)
             return Promise.resolve({ code: 0 })
         }).catch(error => {
             const body = JSON.stringify(_.get(error, "response.data", "(no body)"));
-            ctx.messageClient.respond(`Failed to close ${issueUrl} ${error}: ${body}`)
+            ctx.messageClient.respond(`Failed to close issue.
+URL: ${issueUrl}
+Request body: ${JSON.stringify(jsonBody)}
+Error: ${error}
+Reponse body: ${body}`)
             return Promise.resolve({ code: 1 })
         })
     }
