@@ -1,7 +1,7 @@
 applications:
 - name: atomista-action-board
   command: $(npm bin)/atomist-client
-  memory: 512M
+  memory: 128
   buildpack: https://github.com/cloudfoundry/nodejs-buildpack
   env:
     SUPPRESS_NO_CONFIG_WARNING: true
