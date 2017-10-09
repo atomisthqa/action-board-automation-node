@@ -15,8 +15,9 @@ import { logger } from "@atomist/automation-client/internal/util/logger";
 import * as slack from "@atomist/slack-messages/SlackMessages";
 import { teamStream } from "./helpers";
 import { globalActionBoardTracker, ActionBoardSpecifier, ActionBoardActivity } from './globalState';
+import * as _ from 'lodash';
 
-@CommandHandler("Complete this lovely issue", "I am all done with this one")
+@CommandHandler("Complete this lovely issue")
 @Tags("action-board")
 export class CloseIssue implements HandleCommand {
     public static Name = "CloseIssue";
@@ -53,7 +54,7 @@ export class CloseIssue implements HandleCommand {
             logger.info(`Successfully closed ${issueUrl}`)
             return Promise.resolve({ code: 0 })
         }).catch(error => {
-            ctx.messageClient.respond(`Failed to close ${issueUrl} ${error}`)
+            ctx.messageClient.respond(`Failed to close ${issueUrl} ${error}: ${_.get(error, "response.data", "(no body)")}`)
             return Promise.resolve({ code: 1 })
         })
     }
