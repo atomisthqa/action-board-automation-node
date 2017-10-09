@@ -54,7 +54,8 @@ export class CloseIssue implements HandleCommand {
             logger.info(`Successfully closed ${issueUrl}`)
             return Promise.resolve({ code: 0 })
         }).catch(error => {
-            ctx.messageClient.respond(`Failed to close ${issueUrl} ${error}: ${_.get(error, "response.data", "(no body)")}`)
+            const body = JSON.stringify(_.get(error, "response.data", "(no body)"));
+            ctx.messageClient.respond(`Failed to close ${issueUrl} ${error}: ${body}`)
             return Promise.resolve({ code: 1 })
         })
     }
