@@ -17,7 +17,7 @@ import { teamStream } from "./helpers";
 import { globalActionBoardTracker, ActionBoardSpecifier, ActionBoardActivity } from './globalState';
 import * as _ from 'lodash';
 
-@CommandHandler("Complete this lovely issue")
+@CommandHandler("Complete this lovely issue", "is this required")
 @Tags("action-board")
 export class CloseIssue implements HandleCommand {
     public static Name = "CloseIssue";
