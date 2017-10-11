@@ -171,141 +171,139 @@ export function doWazzup(ctx: HandlerContext,
     provenanceMessage?: string,
 ): Promise<ActionBoardActivity[]> {
 
-    function issues(): Promise<Activities> {
-        const query = `assignee:${actionBoard.githubName}+state:open`;
-        const htmlSearch = encodeURI(`https://github.com/search?q=${query}&type=Issues`);
-        const apiSearch = encodeURI(`https://api.github.com/search/issues?q=${query}`);
+    const linkedRepoPromise: Promise<Repository[]> =
+        findLinkedRepositories(ctx, actionBoard.channelId);
 
-        return axios.get(apiSearch,
-            { headers: { Authorization: `token ${githubToken}` } }
-        ).then((response) => {
-            const result = response.data as GitHubIssueSearchResult;
-            logger.info("Successfully got stuff from GitHub")
+    return Promise.all([
+        whereAmIRunning(),
+        issues(githubToken,
+            actionBoard.githubName,
+            linkedRepoPromise)]).then(values => {
+                const [provenance, issues] = values;
+                console.log("ISSUE summary: " + JSON.stringify(issues.summary))
+                console.log("ISSUE activites: " + JSON.stringify(issues.activities.length))
+                const summaryAttachments = [issues.summary.appearance];
+                const currentActivities = issues.activities.filter(a => a.current);
+                const futureActivities = issues.activities.filter(a => !a.current).sort(priorityThenRecency).slice(0, 5);
 
-            // no results, sad day
-            if (result.total_count === 0) {
-                logger.info("No issues found tho");
-                const summary: Summary = {
-                    appearance: {
-                        text: `There are no issues assigned to you (${this.githubName}) in GitHub.`,
-                        fallback: "no issues for you"
-                    }
-                };
-                return Promise.resolve({ summary, activities: [] })
-            }
+                const currentAttachments = currentActivities.map(a => a.appearance);
+                const text = currentActivities.length > 0 ? `You are currently working on ${
+                    currentActivities.length === 1 ? "one thing:" : currentActivities.length + " things"}`
+                    : 'Here are some things you could do.';
 
-            logger.info("generating summary");
+                const futureAttachments = actionBoard.collapse ? [] : futureActivities.map(a => a.appearance);
+                const includedActivities = actionBoard.collapse ? currentActivities : currentActivities.concat(futureActivities);
+
+                const collapseButton = actionBoard.collapse ?
+                    buttonForCommand({ text: "Expand" },
+                        ActionBoardUpdate.Name, { ...actionBoard, collapse: "false" }) :
+                    buttonForCommand({ text: "Collapse" },
+                        ActionBoardUpdate.Name, { ...actionBoard, collapse: "true" })
+
+                const maintenanceAttachments = [{
+                    fallback: "buttons to refresh",
+                    actions: [
+                        buttonForCommand({ text: "Refresh" },
+                            ActionBoardUpdate.Name,
+                            { ...actionBoard, collapse: actionBoard.collapse ? "true" : "false" }),
+                        collapseButton
+                    ]
+                }]
+
+                const provenanceAttachments = actionBoard.collapse ? [] : [{
+                    fallback: "provenance",
+                    footer: provenance +
+                    `\n ID ${actionBoard.wazzupMessageId}${provenanceMessage ? `\nlast update: ${provenanceMessage}` : ""}`
+                }];
+
+                const message: slack.SlackMessage = {
+                    text,
+                    attachments: currentAttachments.concat(
+                        summaryAttachments).concat(
+                        maintenanceAttachments).concat(
+                        futureAttachments).concat(
+                        provenanceAttachments)
+                }
+
+                const messageOptions: MessageOptions = {
+                    id: actionBoard.wazzupMessageId,
+                    ttl: null, // always update the message if it exists
+                    post:
+                    triggeredByUser ? "always" :
+                        "update_only",
+                    ts: actionBoard.ts + 1,
+                }
+
+                return ctx.messageClient.addressChannels(message,
+                    actionBoard.channelName,
+                    messageOptions).then(z => {
+                        logger.info("Returning activities")
+                        const activities: ActionBoardActivity[] =
+                            includedActivities.map(i => { return { identifier: i.identifier, } });
+                        return Promise.resolve(activities)
+                    })
+            });
+}
+
+function issues(githubToken: string, githubLogin: string, linkedRepos: Promise<Repository[]>): Promise<Activities> {
+    const query = `assignee:${githubLogin}+state:open`;
+    const htmlSearch = encodeURI(`https://github.com/search?q=${query}&type=Issues`);
+    const apiSearch = encodeURI(`https://api.github.com/search/issues?q=${query}`);
+
+    return axios.get(apiSearch,
+        { headers: { Authorization: `token ${githubToken}` } }
+    ).then((response) => {
+        const result = response.data as GitHubIssueSearchResult;
+        logger.info("Successfully got stuff from GitHub")
+
+        // no results, sad day
+        if (result.total_count === 0) {
+            logger.info("No issues found tho");
             const summary: Summary = {
                 appearance: {
-                    color: gitHubIssueColor,
-                    text: `You have ${slack.url(htmlSearch, `${result.total_count} open issues on GitHub`)}.`,
-                    fallback: "gh issue count"
+                    text: `There are no issues assigned to you (${this.githubName}) in GitHub.`,
+                    fallback: "no issues for you"
                 }
             };
+            return Promise.resolve({ summary, activities: [] })
+        }
 
-            const linkedRepoPromise: Promise<Repository[]> = findLinkedRepositories(ctx, actionBoard.channelId);
-
-            return linkedRepoPromise.then(linkedRepositories => {
-
-                console.log("did find the linked repos");
-                const activities: Activity[] = result.items.map(i => {
-                    return {
-                        identifier: i.url,
-                        priority: priority(linkedRepositories, i),
-                        recency: normalizeTimestamp(i.updated_at),
-                        current: hasLabel(i, inProgressLabelName),
-                        appearance: renderIssue(i)
-                    }
-                });
-
-                return Promise.resolve({ summary, activities })
-            });
-        }).catch(error => {
-            const summary: Summary = {
-                appearance: {
-                    color: "FF0000",
-                    text: "Error from GitHub: " + error,
-                    fallback: "an error from GitHub",
-                }
+        logger.info("generating summary");
+        const summary: Summary = {
+            appearance: {
+                color: gitHubIssueColor,
+                text: `You have ${slack.url(htmlSearch, `${result.total_count} open issues on GitHub`)}.`,
+                fallback: "gh issue count"
             }
-            console.log((`****_________TRON: your failed token was ${githubToken}`))
-            return ctx.messageClient.addressUsers(`Error doing ${apiSearch}: ${error}`, admin).
-                then(z => Promise.resolve({ summary, activities: [] }))
+        };
 
-        })
-    };
+        return linkedRepos.then(linkedRepositories => {
 
+            console.log("did find the linked repos");
+            const activities: Activity[] = result.items.map(i => {
+                return {
+                    identifier: i.url,
+                    priority: priority(linkedRepositories, i),
+                    recency: normalizeTimestamp(i.updated_at),
+                    current: hasLabel(i, inProgressLabelName),
+                    appearance: renderIssue(i)
+                }
+            });
 
-    return Promise.all([whereAmIRunning(), issues()]).then(values => {
-
-        const [provenance, issues] = values;
-        console.log("ISSUE summary: " + JSON.stringify(issues.summary))
-        console.log("ISSUE activites: " + JSON.stringify(issues.activities.length))
-        const summaryAttachments = [issues.summary.appearance];
-        const currentActivities = issues.activities.filter(a => a.current);
-        const futureActivities = issues.activities.filter(a => !a.current).sort(priorityThenRecency).slice(0, 5);
-
-        const currentAttachments = currentActivities.map(a => a.appearance);
-        const text = currentActivities.length > 0 ? `You are currently working on ${
-            currentActivities.length === 1 ? "one thing:" : currentActivities.length + " things"}`
-            : 'Here are some things you could do.';
-
-
-        const futureAttachments = actionBoard.collapse ? [] : futureActivities.map(a => a.appearance);
-        const includedActivities = actionBoard.collapse ? currentActivities : currentActivities.concat(futureActivities);
-
-
-        const collapseButton = actionBoard.collapse ?
-            buttonForCommand({ text: "Expand" },
-                ActionBoardUpdate.Name, { ...actionBoard, collapse: "false" }) :
-            buttonForCommand({ text: "Collapse" },
-                ActionBoardUpdate.Name, { ...actionBoard, collapse: "true" })
-
-
-        const maintenanceAttachments = [{
-            fallback: "buttons to refresh",
-            actions: [
-                buttonForCommand({ text: "Refresh" },
-                    ActionBoardUpdate.Name,
-                    { ...actionBoard, collapse: actionBoard.collapse ? "true" : "false" }),
-                collapseButton
-            ]
-        }]
-
-        const provenanceAttachments = actionBoard.collapse ? [] : [{
-            fallback: "provenance",
-            footer: provenance +
-            `\n ID ${actionBoard.wazzupMessageId}${provenanceMessage ? `\nlast update: ${provenanceMessage}` : ""}`
-        }];
-
-        const message: slack.SlackMessage = {
-            text,
-            attachments: currentAttachments.concat(
-                summaryAttachments).concat(
-                maintenanceAttachments).concat(
-                futureAttachments).concat(
-                provenanceAttachments)
+            return Promise.resolve({ summary, activities })
+        });
+    }).catch(error => {
+        const summary: Summary = {
+            appearance: {
+                color: "FF0000",
+                text: "Error from GitHub: " + error,
+                fallback: "an error from GitHub",
+            }
         }
-
-        const messageOptions: MessageOptions = {
-            id: actionBoard.wazzupMessageId,
-            ttl: null, // always update the message if it exists
-            post:
-            triggeredByUser ? "always" :
-                "update_only",
-            ts: actionBoard.ts + 1,
-        }
-
-        return ctx.messageClient.addressChannels(message,
-            actionBoard.channelName,
-            messageOptions).then(z => {
-                logger.info("Returning activities")
-                const activities: ActionBoardActivity[] =
-                    includedActivities.map(i => { return { identifier: i.identifier, } });
-                return Promise.resolve(activities)
-            })
-    });
-}
+        console.log((`****_________TRON: your failed token was ${githubToken}`))
+        return { summary, activities: [] }
+    })
+};
 
 function priorityThenRecency(activity1: Activity, activity2: Activity): number {
     if (activity1.priority !== activity2.priority) {
