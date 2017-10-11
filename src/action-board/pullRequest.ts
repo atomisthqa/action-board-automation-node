@@ -9,8 +9,9 @@ import { CloseIssue } from "./Complete";
 import { CommenceWork } from "./Commence";
 import { Unassign } from "./Unassign";
 
-const query = `query myOpenPullRequests($q: String!) {
+const graphQlQuery = `query myOpenPullRequests($q: String!) {
   search(first:10, type: ISSUE, query: $q) {
+    issueCount
     nodes {
       ... on PullRequest {
         url
@@ -67,18 +68,30 @@ export function myOpenPullRequests(githubToken: string,
     githubLogin: string,
     linkedRepos: Promise<Repository[]>):
     Promise<Activities> {
-    const query = `is:pr+author:${githubLogin}+state:open`;
-    const htmlSearch = encodeURI(`https://github.com/search?q=${query}&type=Issues`);
-    const apiSearch = encodeURI(`https://api.github.com/search/pr?q=${query}`);
+    const searchQuery = `is:pr author:${githubLogin} state:open`;
+    const htmlSearch = encodeURI(`https://github.com/search?q=${searchQuery}&type=Issues`);
+    const apiSearch = encodeURI(`https://api.github.com/graphql`);
 
-    return axios.get(apiSearch,
-        { headers: { Authorization: `token ${githubToken}` } }
+    return axios.post(apiSearch,
+        { query: graphQlQuery, variables: { q: searchQuery } },
+        { headers: { Authorization: `bearer ${githubToken}` } }
     ).then((response) => {
-        const result = response.data;
+        console.log("Got back: " + JSON.stringify(response.data))
+        if (!response.data.data) {
+            const summary: Summary = {
+                appearance: {
+                    color: "FF0000",
+                    text: `Errors from GitHub's graphql: ${JSON.stringify(response.data.errors)}`,
+                    fallback: "no PRs for you"
+                }
+            };
+            return Promise.resolve({ summary, activities: [] })
+        }
+        const result = response.data.data.search;
         logger.info("Successfully got PRs from GitHub")
 
         // no results, sad day
-        if (result.total_count === 0) {
+        if (result.issueCount === 0) {
             logger.info("No PRs found tho");
             const summary: Summary = {
                 appearance: {
@@ -94,7 +107,7 @@ export function myOpenPullRequests(githubToken: string,
         const summary: Summary = {
             appearance: {
                 color: gitHubPullRequestColor,
-                text: `You have ${slack.url(htmlSearch, `${result.total_count} open pull requests on GitHub`)}.`,
+                text: `You have ${slack.url(htmlSearch, `${result.issueCount} open pull requests on GitHub`)}.`,
                 fallback: "gh PR count"
             }
         };
@@ -102,7 +115,7 @@ export function myOpenPullRequests(githubToken: string,
         return linkedRepos.then(linkedRepositories => {
 
             console.log("did find the linked repos");
-            const activities: Activity[] = result.items.map(i => {
+            const activities: Activity[] = result.nodes.map(i => {
                 return {
                     identifier: i.url,
                     priority: priority(linkedRepositories, i),
@@ -115,6 +128,8 @@ export function myOpenPullRequests(githubToken: string,
             return Promise.resolve({ summary, activities })
         });
     }).catch(error => {
+        console.log((error as Error).stack)
+        console.log("Error is " + JSON.stringify(error));
         const summary: Summary = {
             appearance: {
                 color: "FF0000",
@@ -129,14 +144,14 @@ export function myOpenPullRequests(githubToken: string,
 function renderPullRequest(pr: any): slack.Attachment {
 
     const issueTitle = `#${pr.number}: ${pr.title}`;
-    const labels = pr.labels.map((label) => toEmoji(label.name)).join(" ");
-    const title = `${labels} ${slack.url(pr.html_url, issueTitle)}`;
+    const labels = (pr.labels.nodes || []).map((label) => toEmoji(label.name)).join(" ");
+    const title = `${labels} ${slack.url(pr.url, issueTitle)}`;
     const repository = pr.repository;
 
     const attachment: slack.Attachment = {
         fallback: slack.escape(issueTitle),
         title,
-        footer: `${slack.url(pr.html_url, repository.owner + "/" + repository.name)}`,
+        footer: `${slack.url(pr.url, repository.owner + "/" + repository.name)}`,
         ts: normalizeTimestamp(pr.updated_at),
         color: gitHubPullRequestColor,
         footer_icon: "http://images.atomist.com/rug/issue-open.png"
@@ -166,7 +181,7 @@ function renderPullRequest(pr: any): slack.Attachment {
 function priority(linkedRepositories: Repository[], pr: any): number {
     const repository = pr.repository;
 
-    let opinion = 0;
+    let opinion = 2; // higher than issues
     let atWork = isWorkday();
 
     if (hasLabel(pr, upNextLabelName)) {

@@ -188,12 +188,13 @@ export function doWazzup(ctx: HandlerContext,
         myOpenPullRequests(githubToken,
             actionBoard.githubName,
             linkedRepoPromise)]).then(values => {
-                const [provenance, issues] = values;
-                console.log("ISSUE summary: " + JSON.stringify(issues.summary))
-                console.log("ISSUE activites: " + JSON.stringify(issues.activities.length))
-                const summaryAttachments = [issues.summary.appearance];
-                const currentActivities = issues.activities.filter(a => a.current);
-                const futureActivities = issues.activities.filter(a => !a.current).sort(priorityThenRecency).slice(0, 5);
+                const [provenance, issues, prs] = values;
+                console.log("PR summary: " + JSON.stringify(prs.summary))
+                console.log("PR activites: " + JSON.stringify(prs.activities.length))
+                const summaryAttachments = [issues.summary.appearance, prs.summary.appearance];
+                const allActivities = issues.activities.concat(prs.activities);
+                const currentActivities = allActivities.filter(a => a.current);
+                const futureActivities = allActivities.filter(a => !a.current).sort(priorityThenRecency).slice(0, 5);
 
                 const currentAttachments = currentActivities.map(a => a.appearance);
                 const text = currentActivities.length > 0 ? `You are currently working on ${

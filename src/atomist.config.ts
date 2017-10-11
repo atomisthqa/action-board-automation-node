@@ -16,7 +16,7 @@ const token = process.env.GITHUB_TOKEN;
 
 export const configuration: Configuration = {
     name: "action-board",
-    version: "0.2.0",
+    version: pj.version,
     teamId: "T1L0VDKJP",
     commands: [
         () => new ActionBoard(),
