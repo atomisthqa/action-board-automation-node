@@ -91,7 +91,7 @@ export function myOpenPullRequests(githubToken: string,
     })
 };
 
-function renderPullRequest(pr: any): slack.Attachment {
+function renderPullRequest(pr: graphql.MyOpenPullRequests.PullRequestInlineFragment): slack.Attachment {
 
     const issueTitle = `#${pr.number}: ${pr.title}`;
     const labels = (pr.labels.nodes || []).map((label) => toEmoji(label.name)).join(" ");
@@ -102,25 +102,24 @@ function renderPullRequest(pr: any): slack.Attachment {
         fallback: slack.escape(issueTitle),
         title,
         footer: `${slack.url(pr.url, repository.owner.login + "/" + repository.name)}`,
-        ts: normalizeTimestamp(pr.updated_at),
+        ts: normalizeTimestamp(pr.updatedAt),
         color: gitHubPullRequestColor,
         footer_icon: "http://images.atomist.com/rug/issue-open.png"
     };
 
+    const apiUrl = `http://api.github.com/repos/${pr.repository.owner.login}/${pr.repository.name}/pulls/${pr.number}`
     if (hasLabel(pr, inProgressLabelName)) {
         attachment.color = "#EF64E1";
         attachment.actions = [
             buttonForCommand({ text: "Postpone" }, PostponeWork.Name,
-                { issueUrl: pr.url }, ),
-            buttonForCommand({ text: "Complete!" }, CloseIssue.Name,
-                { issueUrl: pr.url })
+                { issueUrl: apiUrl }, ),
         ]
     } else {
         attachment.actions = [
             buttonForCommand({ text: "Commence" }, CommenceWork.Name,
-                { issueUrl: pr.url }),
-            buttonForCommand({ text: "Unassign me" }, Unassign.Name,
-                { issueUrl: pr.url })
+                { issueUrl: apiUrl }),
+            buttonForCommand({ text: "Forget it" }, CloseIssue.Name,
+                { issueUrl: apiUrl })
         ]
     }
 
@@ -128,10 +127,11 @@ function renderPullRequest(pr: any): slack.Attachment {
 }
 
 // higher is better
-function priority(linkedRepositories: Repository[], pr: any): number {
+function priority(linkedRepositories: Repository[], pr: graphql.MyOpenPullRequests.PullRequestInlineFragment): number {
     const repository = pr.repository;
+    const owner = repository.owner.login;
 
-    let opinion = 2; // higher than issues
+    let opinion = 1; // default is higher than issues
     let atWork = isWorkday();
 
     if (hasLabel(pr, upNextLabelName)) {
@@ -139,21 +139,21 @@ function priority(linkedRepositories: Repository[], pr: any): number {
         opinion += 11;
     }
 
-    if (linkedRepositories.some(linked => repository.name === linked.name && repository.owner === linked.owner)) {
+    if (linkedRepositories.some(linked => repository.name === linked.name && owner === linked.owner)) {
         // relevant to channel
         opinion += 10;
     }
 
     // work
-    if (repository.owner === "atomisthq" && atWork) {
+    if (owner === "atomisthq" && atWork) {
         opinion += 4;
     }
-    if (repository.owner === "atomist" && atWork) {
+    if (owner === "atomist" && atWork) {
         opinion += 6;
     }
 
     // work+personal both
-    if (repository.name === "elm-rugs" && repository.owner === "satellite-of-love") {
+    if (repository.name === "elm-rugs" && owner === "satellite-of-love") {
         if (atWork) {
             opinion += 4; // I really care about PRs here
         } else {
@@ -169,7 +169,7 @@ function priority(linkedRepositories: Repository[], pr: any): number {
         "atm-near-me",
         "atm-bankomat",
         "satellite-of-love"];
-    if (myTestTeams.some(testOrg => testOrg === repository.owner)) {
+    if (myTestTeams.some(testOrg => testOrg === owner)) {
         opinion -= 5;
     }
 
