@@ -1,0 +1,52 @@
+query myOpenPullRequests($q: String!) {
+  search(first:10, type: ISSUE, query: $q) {
+    issueCount
+    nodes {
+      ... on PullRequest {
+        url
+        number
+        title
+        repository { name owner { login } }
+        headRef {
+          target {
+            ... on Commit {
+              commitUrl
+              status {
+                state
+                contexts {
+                  context
+                  targetUrl
+                  state
+                } 
+              }
+            }
+          }
+        }
+        assignees(first: 100) {
+          nodes {
+          login
+             avatarUrl(size: 75)
+          }
+        }
+        author {
+          login
+          avatarUrl(size: 75)
+        }
+        state
+        reviews(first:10) {
+          nodes {
+            author {
+              login
+            }
+            state
+          }
+        }
+        createdAt
+        labels(first: 100) {
+          nodes { name }
+        }
+        updatedAt
+      }
+    }
+  }
+}

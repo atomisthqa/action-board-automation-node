@@ -12,3 +12,4 @@ npm-debug.log
 /release
 graphql.config.json
 actionBoardsCache.json
+git-info.json

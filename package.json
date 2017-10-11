@@ -8,7 +8,8 @@
     "@types/winston": "^2.3.6",
     "cfenv": "^1.0.4",
     "child-process": "^1.0.2",
-    "fs": "0.0.1-security"
+    "fs": "0.0.1-security",
+    "graphql-code-generator": "^0.8.13"
   },
   "devDependencies": {
     "@types/node": "^8.0.34",
@@ -30,18 +31,20 @@
   "scripts": {
     "autotest": "supervisor -q -n exit -e ts -x npm -- run test",
     "clean": "rm -f *-v8.log; rm -f profile.txt; rm -rf build; rm -rf target",
-    "compile": "tsc -p .",
+    "compile": "npm run gql:gen-github && tsc -p .",
     "fmt": "tsfmt --replace",
     "lint": "tslint '**/*.ts' --exclude 'node_modules/**' --exclude 'build/**' -t verbose",
     "lint-fix": "tslint --fix '**/*.ts' --exclude 'node_modules/**' --exclude 'build/**' -t verbose",
     "testone": "mocha --compilers ts:espower-typescript/guess \"test/**/${TEST:-*.ts}\"",
     "test": "mocha --compilers ts:espower-typescript/guess \"test/**/*.ts\"",
     "benchmark": "mocha --prof --compilers ts:espower-typescript/guess \"test/**/*Benchmark.ts\"; node --prof-process isolate-* > profile.txt",
-    "start": "npm run compile && $(npm bin)/atomist-client ",
+    "start": "npm run git:info && npm run compile && $(npm bin)/atomist-client ",
     "autostart": "npm-run-all --parallel watch:build watch:server --print-label",
     "watch:build": "tsc --watch",
     "watch:server": "nodemon node_modules/@atomist/automation-client/start.client.js --watch './build'",
-    "cf:push": "npm run clean && npm run compile && cf target -s jessitron && cf bgd atomista-action-board && cf stop atomista-action-board-old && cf apps"
+    "cf:push": "npm run clean && npm run compile && cf target -s jessitron && cf bgd atomista-action-board && cf stop atomista-action-board-old && cf apps",
+    "git:info": "$(npm bin)/git-info",
+    "gql:gen-github": "node_modules/.bin/gql-gen --url https://api.github.com/graphql --template typescript --out ./typings/github/ \"./github-graphql/*.graphql\" --header \"Authorization: bearer $GITHUB_TOKEN\" --header \"User-Agent: what\""
   },
   "author": "Atomist, Inc.",
   "license": "GPL-3.0",

@@ -13,6 +13,8 @@ const pj = require("../../package.json");
 
 
 const token = process.env.GITHUB_TOKEN;
+const host = "https://automation-staging.atomist.services";
+
 
 export const configuration: Configuration = {
     name: "action-board",
@@ -40,5 +42,9 @@ export const configuration: Configuration = {
                 enabled: false,
             },
         },
+    },
+    endpoints: {
+        graphql: `${host}/graphql/team`,
+        api: `${host}/registration`,
     },
 };

@@ -8,60 +8,10 @@ import { PostponeWork } from "./PostponeWork";
 import { CloseIssue } from "./Complete";
 import { CommenceWork } from "./Commence";
 import { Unassign } from "./Unassign";
+import * as GraphQL from "@atomist/automation-client/graph/graphQL";
+import * as graphql from "../../typings/github/types"
 
-const graphQlQuery = `query myOpenPullRequests($q: String!) {
-  search(first:10, type: ISSUE, query: $q) {
-    issueCount
-    nodes {
-      ... on PullRequest {
-        url
-        number
-        title
-        repository { name owner { login } }
-        headRef {
-          target {
-            ... on Commit {
-              commitUrl
-              status {
-                state
-                contexts {
-                  context
-                  targetUrl
-                  state
-                } 
-              }
-            }
-          }
-        }
-        assignees(first: 100) {
-          nodes {
-          login
-             avatarUrl(size: 75)
-          }
-        }
-        author {
-          login
-          avatarUrl(size: 75)
-        }
-        state
-        reviews(first:10) {
-          nodes {
-            author {
-              login
-            }
-            state
-          }
-        }
-        createdAt
-        labels(first: 100) {
-          nodes { name }
-        }
-        updatedAt
-      }
-    }
-  }
-}
-`;
+const graphQlQuery = GraphQL.subscriptionFromFile("github-graphql/MyOpenPR.graphql");
 
 
 export function myOpenPullRequests(githubToken: string,
@@ -87,8 +37,8 @@ export function myOpenPullRequests(githubToken: string,
             };
             return Promise.resolve({ summary, activities: [] })
         }
-        const result = response.data.data.search;
-        logger.info("Successfully got PRs from GitHub")
+        const result = (response.data.data as graphql.MyOpenPullRequests.Query).search;
+        logger.info("Successfully got PRs from GitHub");
 
         // no results, sad day
         if (result.issueCount === 0) {
@@ -119,7 +69,7 @@ export function myOpenPullRequests(githubToken: string,
                 return {
                     identifier: i.url,
                     priority: priority(linkedRepositories, i),
-                    recency: normalizeTimestamp(i.updated_at),
+                    recency: normalizeTimestamp(i.updatedAt),
                     current: hasLabel(i, inProgressLabelName),
                     appearance: renderPullRequest(i)
                 }
@@ -151,7 +101,7 @@ function renderPullRequest(pr: any): slack.Attachment {
     const attachment: slack.Attachment = {
         fallback: slack.escape(issueTitle),
         title,
-        footer: `${slack.url(pr.url, repository.owner + "/" + repository.name)}`,
+        footer: `${slack.url(pr.url, repository.owner.login + "/" + repository.name)}`,
         ts: normalizeTimestamp(pr.updated_at),
         color: gitHubPullRequestColor,
         footer_icon: "http://images.atomist.com/rug/issue-open.png"
@@ -226,7 +176,7 @@ function priority(linkedRepositories: Repository[], pr: any): number {
     return opinion;
 }
 
-function hasLabel(item: { labels: { nodes: { name: string }[] } },
+function hasLabel(item: graphql.MyOpenPullRequests.PullRequestInlineFragment,
     labelName: string): boolean {
     return item.labels.nodes.some(l => l.name === labelName)
 }
