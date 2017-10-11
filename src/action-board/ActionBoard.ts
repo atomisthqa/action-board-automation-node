@@ -38,16 +38,16 @@ const admin = "jessitron";
 export class ActionBoard implements HandleCommand {
     public static Name = "ActionBoard";
 
-    @MappedParameter(MappedParameters.SLACK_CHANNEL_NAME)
+    @MappedParameter(MappedParameters.SlackChannelName)
     public channelName: string;
 
-    @MappedParameter(MappedParameters.SLACK_CHANNEL)
+    @MappedParameter(MappedParameters.SlackChannel)
     public channelId: string;
 
     @MappedParameter("atomist://github/username")
     public githubName: string;
 
-    @Secret(Secrets.USER_TOKEN)
+    @Secret(Secrets.UserToken)
     public githubToken: string;
 
 
@@ -97,7 +97,7 @@ export class ActionBoardUpdate implements HandleCommand {
     @Parameter({ pattern: /^.*$/, required: true })
     public githubName: string;
 
-    @MappedParameter(MappedParameters.SLACK_USER_NAME)
+    @MappedParameter(MappedParameters.SlackUserName)
     public slackName: string;
 
     @Parameter({ pattern: /^.*$/, required: true })
@@ -106,7 +106,7 @@ export class ActionBoardUpdate implements HandleCommand {
     @Parameter({ pattern: /^.*$/, required: false })
     public collapse: string = "false";
 
-    @Secret(Secrets.USER_TOKEN)
+    @Secret(Secrets.UserToken)
     public githubToken: string;
 
     public handle(ctx: HandlerContext): Promise<HandlerResult> {

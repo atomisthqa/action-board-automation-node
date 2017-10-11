@@ -22,13 +22,13 @@ import * as _ from 'lodash';
 export class CloseIssue implements HandleCommand {
     public static Name = "CloseIssue";
 
-    @MappedParameter(MappedParameters.SLACK_USER)
+    @MappedParameter(MappedParameters.SlackUser)
     public slackUser: string;
 
     @MappedParameter("atomist://github/username")
     public githubName: string;
 
-    @Secret(Secrets.USER_TOKEN)
+    @Secret(Secrets.UserToken)
     public githubToken: string;
 
     @Parameter({ pattern: /^.*$/ })
