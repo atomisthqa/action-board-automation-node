@@ -13,19 +13,24 @@ import {
 } from "@atomist/automation-client/Handlers";
 import { logger } from "@atomist/automation-client/internal/util/logger";
 import * as slack from "@atomist/slack-messages/SlackMessages";
-import { findLinkedRepositories, isWorkday, repositoryFromIssue, Repository, toEmoji, normalizeTimestamp, timeSince, inProgressLabelName } from "./helpers";
+import {
+    Activity, Summary,
+    findLinkedRepositories,
+    isWorkday, repositoryFromIssue,
+    Repository, toEmoji, normalizeTimestamp,
+    timeSince, inProgressLabelName, gitHubIssueColor, Activities, upNextLabelName
+} from "./helpers";
 import { whereAmIRunning } from './Provenance';
 import { GitHubIssueResult, hasLabel, GitHubIssueSearchResult } from './GitHubApiTypes';
 import { MessageOptions, buttonForCommand, MessageClient } from '@atomist/automation-client/spi/message/MessageClient';
 import { globalActionBoardTracker, ActionBoardSpecifier, ActionBoardActivity } from './globalState';
 import { Unassign } from './Unassign';
 import { CloseIssue } from './Complete';
+import { PostponeWork } from './PostponeWork';
+import { CommenceWork } from './Commence';
 
 
-const teamStream = "#team-stream";
 const admin = "jessitron";
-const gitHubIssueColor = "0f67da";
-const upNextLabelName = "up-next";
 
 @CommandHandler("Presents a list of things to work on", "wazzup")
 @Tags("jessitron")
@@ -305,6 +310,7 @@ function issues(githubToken: string, githubLogin: string, linkedRepos: Promise<R
     })
 };
 
+
 function priorityThenRecency(activity1: Activity, activity2: Activity): number {
     if (activity1.priority !== activity2.priority) {
         return activity2.priority - activity1.priority;
@@ -312,21 +318,6 @@ function priorityThenRecency(activity1: Activity, activity2: Activity): number {
     return activity2.recency - activity1.recency;
 }
 
-interface Activities {
-    summary: Summary,
-    activities: Activity[]
-}
-interface Summary {
-    appearance: slack.Attachment
-}
-
-interface Activity {
-    identifier: string,
-    priority: number,
-    recency: number,
-    appearance: slack.Attachment,
-    current: boolean
-}
 
 // higher is better
 function priority(linkedRepositories: Repository[], issue: GitHubIssueResult): number {
@@ -412,91 +403,3 @@ function renderIssue(issue: GitHubIssueResult): slack.Attachment {
 
     return attachment;
 }
-
-
-
-
-
-
-
-@CommandHandler("Start work on a thing", "i am going to start work on an issue and i have the apiUrl")
-@Tags("jessitron")
-export class CommenceWork implements HandleCommand {
-    public static Name = "CommenceWork";
-
-    @MappedParameter(MappedParameters.SLACK_USER)
-    public slackUser: string;
-
-    @MappedParameter("atomist://github/username")
-    public githubName: string;
-
-    @Secret(Secrets.USER_TOKEN)
-    public githubToken: string;
-
-    @Parameter({ pattern: /^.*$/ })
-    public issueUrl: string;
-
-    public handle(ctx: HandlerContext): Promise<HandlerResult> {
-        const issueUrl = this.issueUrl;
-        const githubToken = this.githubToken;
-        const slackUser = this.slackUser;
-
-        ctx.messageClient.addressChannels(
-            `${toEmoji(inProgressLabelName)} ${slack.user(slackUser)} is starting work on this issue: ` + this.issueUrl,
-            teamStream);
-
-        const addLabel = encodeURI(`${issueUrl}/labels`);
-
-        return axios.post(addLabel,
-            [inProgressLabelName],
-            { headers: { Authorization: `token ${githubToken}` } }
-        ).then((response) => {
-            logger.info(`Successfully added a label to ${issueUrl}`)
-            return Promise.resolve({ code: 0 })
-        }).catch(error => {
-            ctx.messageClient.respond(`Failed to add ${inProgressLabelName} label to ${issueUrl}.`)
-            return Promise.resolve({ code: 1 })
-        })
-    }
-}
-
-@CommandHandler("Stop work on a thing", "i am going to stop work on an issue and i have the apiUrl")
-@Tags("jessitron")
-export class PostponeWork implements HandleCommand {
-    public static Name = "PostponeWork";
-
-    @MappedParameter(MappedParameters.SLACK_USER)
-    public slackUser: string;
-
-    @MappedParameter("atomist://github/username")
-    public githubName: string;
-
-    @Secret(Secrets.USER_TOKEN)
-    public githubToken: string;
-
-    @Parameter({ pattern: /^.*$/ })
-    public issueUrl: string;
-
-    public handle(ctx: HandlerContext): Promise<HandlerResult> {
-        const issueUrl = this.issueUrl;
-        const githubToken = this.githubToken;
-        const slackUser = this.slackUser;
-
-        ctx.messageClient.addressChannels(
-            `${slack.user(slackUser)} postponed work on this issue: ` + this.issueUrl,
-            teamStream);
-
-        const labelResource = encodeURI(`${issueUrl}/labels/${inProgressLabelName}`);
-
-        return axios.delete(labelResource,
-            { headers: { Authorization: `token ${githubToken}` } }
-        ).then((response) => {
-            logger.info(`Successfully removed a label from ${issueUrl}`)
-            return Promise.resolve({ code: 0 })
-        }).catch(error => {
-            ctx.messageClient.respond(`Failed to remove ${inProgressLabelName} label from ${issueUrl} ${error}`)
-            return Promise.resolve({ code: 1 })
-        })
-    }
-}
-

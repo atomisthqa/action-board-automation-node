@@ -1,9 +1,30 @@
 import { HandlerContext } from '@atomist/automation-client/Handlers';
 import { logger } from "@atomist/automation-client/internal/util/logger";
 import { GitHubIssueResult } from './GitHubApiTypes';
+import * as slack from "@atomist/slack-messages/SlackMessages";
+
+export interface Activities {
+    summary: Summary,
+    activities: Activity[]
+}
+export interface Summary {
+    appearance: slack.Attachment
+}
+
+export interface Activity {
+    identifier: string,
+    priority: number,
+    recency: number,
+    appearance: slack.Attachment,
+    current: boolean
+}
 
 export const teamStream = "#team-stream";
 export const inProgressLabelName = "in-progress";
+export const upNextLabelName = "up-next";
+export const gitHubIssueColor = "0f67da";
+export const gitHubPullRequestColor = "#da900f";
+// another color in that harmony: #da2a0f
 
 const reposLinkedToThisChannel = `query ($teamId: ID!, $channelId: ID!) {
   ChatTeam(id: $teamId) {

@@ -1,11 +1,13 @@
 import { Configuration } from "@atomist/automation-client/configuration";
 import { NotifyOnPush } from "./events/NotifyOnPush";
-import { ActionBoard, CommenceWork, ActionBoardUpdate, PostponeWork } from "./action-board/ActionBoard";
+import { ActionBoard, ActionBoardUpdate } from "./action-board/ActionBoard";
 
 import * as cfenv from "cfenv";
 import { UpdateActionBoardsOnIssue } from "./action-board/UpdateActionBoardsOnIssue";
 import { Unassign } from "./action-board/Unassign";
 import { CloseIssue } from "./action-board/Complete";
+import { PostponeWork } from "./action-board/PostponeWork";
+import { CommenceWork } from "./action-board/Commence";
 
 const pj = require("../../package.json");
 
