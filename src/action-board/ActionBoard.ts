@@ -28,6 +28,7 @@ import { Unassign } from './Unassign';
 import { CloseIssue } from './Complete';
 import { PostponeWork } from './PostponeWork';
 import { CommenceWork } from './Commence';
+import { myOpenPullRequests } from './pullRequest';
 
 
 const admin = "jessitron";
@@ -182,6 +183,9 @@ export function doWazzup(ctx: HandlerContext,
     return Promise.all([
         whereAmIRunning(),
         issues(githubToken,
+            actionBoard.githubName,
+            linkedRepoPromise),
+        myOpenPullRequests(githubToken,
             actionBoard.githubName,
             linkedRepoPromise)]).then(values => {
                 const [provenance, issues] = values;

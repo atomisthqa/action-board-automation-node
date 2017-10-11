@@ -63,7 +63,7 @@ const query = `query myOpenPullRequests($q: String!) {
 `;
 
 
-function pullRequests(githubToken: string,
+export function myOpenPullRequests(githubToken: string,
     githubLogin: string,
     linkedRepos: Promise<Repository[]>):
     Promise<Activities> {
