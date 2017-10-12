@@ -51,7 +51,7 @@ export function findLinkedRepositories(
         { teamId: ctx.teamId, channelId: channelId })
         .then(result => {
             // logger.info("repos linked to query result: " + JSON.stringify(result, null, 2));
-            return result.ChatTeam[0].channels[0].links.map(link => link.repo as Repository);
+            return result.ChatTeam[0].channels.links.map(link => link.repo as Repository);
         }).catch(error => {
             logger.error(`failure running query ${reposLinkedToThisChannel}: ${error}`)
             return [];

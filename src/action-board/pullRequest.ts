@@ -91,6 +91,33 @@ export function myOpenPullRequests(githubToken: string,
     })
 };
 
+function statusEmoji(state: graphql.StatusState): string {
+    switch (state) {
+        case "PENDING":
+            return "construction_worker"
+        case "EXPECTED":
+        case "SUCCESS":
+            return "ok_hand"
+        case "ERROR":
+        case "FAILURE":
+            return "no_entry"
+    }
+}
+
+function reviewEmoji(state: graphql.PullRequestReviewState) {
+    switch (state) {
+        case "PENDING":
+            return "construction_worker"
+        case "CHANGES_REQUESTED":
+        case "COMMENTED":
+            return "eyes"
+        case "APPROVED":
+            return "ok_hand"
+        case "DISMISSED":
+            return "crocodile"
+    }
+}
+
 function renderPullRequest(pr: graphql.MyOpenPullRequests.PullRequestInlineFragment): slack.Attachment {
 
     const issueTitle = `#${pr.number}: ${pr.title}`;
@@ -98,26 +125,34 @@ function renderPullRequest(pr: graphql.MyOpenPullRequests.PullRequestInlineFragm
     const title = `${labels} ${slack.url(pr.url, issueTitle)}`;
     const repository = pr.repository;
 
+    const reviews = pr.reviews.nodes.map(r => `${toEmoji(reviewEmoji(r.state))} review by ${r.author.login} is ${r.state}`)
+    const statuses = pr.headRef.target.status ? pr.headRef.target.status.contexts.map(c =>
+        `${toEmoji(statusEmoji(c.state))} ${c.targetUrl ? slack.url(c.targetUrl, c.context) : c.context} `) : []
+    const text = reviews.concat(statuses).join("\n")
+
     const attachment: slack.Attachment = {
         fallback: slack.escape(issueTitle),
         title,
+        text,
         footer: `${slack.url(pr.url, repository.owner.login + "/" + repository.name)}`,
         ts: normalizeTimestamp(pr.updatedAt),
         color: gitHubPullRequestColor,
         footer_icon: "http://images.atomist.com/rug/issue-open.png"
     };
 
-    const apiUrl = `http://api.github.com/repos/${pr.repository.owner.login}/${pr.repository.name}/pulls/${pr.number}`
+    const asIssueUrl = `https://api.github.com/repos/${pr.repository.owner.login}/${pr.repository.name}/issues/${pr.number}`
+    const apiUrl = `https://api.github.com/repos/${pr.repository.owner.login}/${pr.repository.name}/pulls/${pr.number}`
+
     if (hasLabel(pr, inProgressLabelName)) {
         attachment.color = "#EF64E1";
         attachment.actions = [
             buttonForCommand({ text: "Postpone" }, PostponeWork.Name,
-                { issueUrl: apiUrl }, ),
+                { issueUrl: asIssueUrl }, ),
         ]
     } else {
         attachment.actions = [
             buttonForCommand({ text: "Commence" }, CommenceWork.Name,
-                { issueUrl: apiUrl }),
+                { issueUrl: asIssueUrl, htmlUrl: pr.url }),
             buttonForCommand({ text: "Forget it" }, CloseIssue.Name,
                 { issueUrl: apiUrl })
         ]

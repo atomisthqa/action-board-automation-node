@@ -33,17 +33,22 @@ export class CommenceWork implements HandleCommand {
     @Parameter({ pattern: /^.*$/ })
     public issueUrl: string;
 
+    @Parameter({ pattern: /^.*$/ })
+    public htmlUrl: string;
+
     public handle(ctx: HandlerContext): Promise<HandlerResult> {
         const issueUrl = this.issueUrl;
         const githubToken = this.githubToken;
         const slackUser = this.slackUser;
+        const htmlUrl = this.htmlUrl;
 
         ctx.messageClient.addressChannels(
-            `${toEmoji(inProgressLabelName)} ${slack.user(slackUser)} is starting work on this issue: ` + this.issueUrl,
+            `${toEmoji(inProgressLabelName)} ${slack.user(slackUser)} is starting work on: ` + this.htmlUrl,
             teamStream);
 
         const addLabel = encodeURI(`${issueUrl}/labels`);
 
+        console.log("Posting to: " + addLabel);
         return axios.post(addLabel,
             [inProgressLabelName],
             { headers: { Authorization: `token ${githubToken}` } }
@@ -51,8 +56,9 @@ export class CommenceWork implements HandleCommand {
             logger.info(`Successfully added a label to ${issueUrl}`)
             return Promise.resolve({ code: 0 })
         }).catch(error => {
-            ctx.messageClient.respond(`Failed to add ${inProgressLabelName} label to ${issueUrl}.`)
-            return Promise.resolve({ code: 1 })
+            console.log(`Failure ${addLabel}: ${JSON.stringify(error.message)}`)
+            ctx.messageClient.respond(`Failed to add ${inProgressLabelName} label to ${htmlUrl}: ${error.message}`)
+            return Promise.resolve({ code: 1, message: error.message })
         })
     }
 }

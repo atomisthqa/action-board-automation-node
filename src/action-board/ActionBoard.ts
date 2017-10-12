@@ -256,7 +256,7 @@ export function doWazzup(ctx: HandlerContext,
 }
 
 function issues(githubToken: string, githubLogin: string, linkedRepos: Promise<Repository[]>): Promise<Activities> {
-    const query = `assignee:${githubLogin}+state:open`;
+    const query = `assignee:${githubLogin}+state:open+is:issue`;
     const htmlSearch = encodeURI(`https://github.com/search?q=${query}&type=Issues`);
     const apiSearch = encodeURI(`https://api.github.com/search/issues?q=${query}`);
 
@@ -400,7 +400,7 @@ function renderIssue(issue: GitHubIssueResult): slack.Attachment {
     } else {
         attachment.actions = [
             buttonForCommand({ text: "Commence" }, CommenceWork.Name,
-                { issueUrl: issue.url }),
+                { issueUrl: issue.url, htmlUrl: issue.html_url }),
             buttonForCommand({ text: "Unassign me" }, Unassign.Name,
                 { issueUrl: issue.url })
         ]
