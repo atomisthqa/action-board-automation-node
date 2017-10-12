@@ -11,15 +11,16 @@ import { CommenceWork } from "./action-board/Commence";
 
 const pj = require("../../package.json");
 
+const appEnv = cfenv.getAppEnv();
+const githubCreds = appEnv.getServiceCreds("github-token");
+const dashboardCreds = appEnv.getServiceCreds("dashboard-credentials");
 
-const token = process.env.GITHUB_TOKEN;
-const host = "https://automation-staging.atomist.services";
-
+const token = githubCreds ? githubCreds.token : process.env.GITHUB_TOKEN;
 
 export const configuration: Configuration = {
     name: "action-board",
     version: pj.version,
-    teamIds: "T1L0VDKJP",
+    teamIds: "T095SFFBK",
     commands: [
         () => new ActionBoard(),
         () => new ActionBoardUpdate(),
@@ -35,16 +36,14 @@ export const configuration: Configuration = {
     http: {
         enabled: true,
         auth: {
-            basic: {
-                enabled: false,
+            basic: appEnv.isLocal ? { enabled: false } : {
+                enabled: true,
+                username: dashboardCreds.user,
+                password: dashboardCreds.password,
             },
             bearer: {
                 enabled: false,
             },
         },
-    },
-    endpoints: {
-        graphql: `${host}/graphql/team`,
-        api: `${host}/registration`,
     },
 };
